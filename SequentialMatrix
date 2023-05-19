@@ -1,0 +1,42 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+int main() {
+    int M = 1000, N = 2000, K = 3000;
+
+    int (*matrix_A)[N] = malloc(M * sizeof(*matrix_A));
+    int (*matrix_B)[K] = malloc(N * sizeof(*matrix_B));
+    int (*result_matrix)[K] = malloc(M * sizeof(*result_matrix));
+
+    srand(time(NULL));  
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            matrix_A[i][j] = rand() % 10; 
+        }
+    }
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < K; j++) {
+            matrix_B[i][j] = rand() % 10;
+        }
+    }
+    
+    clock_t start_time = clock(); 
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < K; j++) {
+            for (int k = 0; k < N; k++) {
+                result_matrix[i][j] += matrix_A[i][k] * matrix_B[k][j];
+            }
+        }
+    }
+    clock_t end_time = clock();
+    
+    double runtime = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+    printf("Matrix multiplication took %f seconds\n", runtime);
+
+    free(matrix_A);
+    free(matrix_B);
+    free(result_matrix);
+
+    return 0;
+}
