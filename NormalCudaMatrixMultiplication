@@ -1,0 +1,84 @@
+#include <stdio.h>
+#include <cuda_runtime.h>
+__global__ void MatrixMulKernel(float* M, float* N, float* P, int Mrow,int Mcol,int Ncol) {
+
+  int Row = blockIdx.y * blockDim.y + threadIdx.y;
+
+  int Col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if ((Row < Mrow) && (Col < Ncol)) {
+    float Pvalue = 0;
+
+    for (int k = 0; k < Mcol; ++k) {
+      Pvalue += M[Row * Mrow + k] * N[k * Mcol + Col];
+    }
+
+    P[Row * Ncol + Col] = Pvalue;
+  }
+}
+
+int main() {
+  int a = 1000; 
+  int b = 2000; 
+  int c = 3000; 
+
+  // Allocate memory for matrices M, N, and P on the host
+  float *M, *N, *P;
+  N = (float*)malloc(b*c*sizeof(float));
+  M = (float*)malloc(a*b*sizeof(float));
+  P = (float*)malloc(a*c*sizeof(float));
+
+  // Initialize matrices M and N with random values
+  for (int i = 0; i < a; ++i) {
+    for (int j = 0; j < b; ++j) {
+      M[i * a + j] = rand() % 10;
+    }
+  }
+
+  for(int i=0; i<b;i++)
+  {
+    for(int j=0; j<c; j++)
+    {
+      N[i * b + j] = rand() % 10;
+    }
+  }
+  
+ 
+  float *d_M, *d_N, *d_P;
+  cudaMalloc(&d_M, (a*b)*sizeof(float));
+  cudaMalloc(&d_N, (b*c)*sizeof(float));
+  cudaMalloc(&d_P, (a*c)*sizeof(float));
+
+  cudaMemcpy(d_M, M, sizeof(float)*(a*b), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_N, N, sizeof(float)*(b*c), cudaMemcpyHostToDevice);
+
+  dim3 dimBlock(16,16); //for scalability you need to try with (16,16) , (8,16) and (16,8)
+  dim3 dimGrid((c + dimBlock.x - 1) / dimBlock.x, (a + dimBlock.y - 1) / dimBlock.y);
+
+  cudaEvent_t start, end;
+  float time;
+  cudaEventCreate(&start);
+  cudaEventCreate(&end);
+  cudaEventRecord(start,0 );
+
+  MatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, a, b, c );
+
+  cudaEventRecord(end, 0);
+  cudaEventSynchronize(end);
+  cudaEventElapsedTime(&time, start, end);
+
+  cudaEventDestroy(start);   
+  cudaEventDestroy(end);
+  cudaMemcpy(P, d_P, (a*c)*sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("time elapsed: %.8lf milliseconds\n", time);
+  // Free memory on host and device
+  free(M);
+  free(N);
+  free(P);
+  cudaFree(d_M);
+  cudaFree(d_N);
+  cudaFree(d_P);
+ 
+    return 0;
+}
