@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <cuda_runtime.h>
-__global__ void MatrixMulKernel(float* M, float* N, float* P, int Mrow,int Mcol,int Ncol) {
+__global__ void MatrixKernel(float* M, float* N, float* P, int Mrow,int Mcol,int Ncol) {
 
   int Row = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -61,7 +61,7 @@ int main() {
   cudaEventCreate(&end);
   cudaEventRecord(start,0 );
 
-  MatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, a, b, c );
+  MatrixKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, a, b, c );
 
   cudaEventRecord(end, 0);
   cudaEventSynchronize(end);
