@@ -1,0 +1,105 @@
+#include <stdio.h> 
+#define TILE_SIZE 16
+#include <cuda_runtime.h>
+__global__ void MatrixMulKernel(float* M, float* N, float* P, int Mrow, int Mcol, int Ncol) {
+  int Row = blockIdx.y * blockDim.y + threadIdx.y;
+  int Col = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ float M_shared[TILE_SIZE][TILE_SIZE];
+  __shared__ float N_shared[TILE_SIZE][TILE_SIZE];
+
+  float Pvalue = 0;
+
+  for (int t = 0; t < (Mcol - 1) / TILE_SIZE + 1; ++t) {
+    // Load tile of matrix M into shared memory
+    if (Row < Mrow && t * TILE_SIZE + threadIdx.x < Mcol) {
+      M_shared[threadIdx.y][threadIdx.x] = M[Row * Mcol + t * TILE_SIZE + threadIdx.x];
+    } else {
+      M_shared[threadIdx.y][threadIdx.x] = 0;
+    }
+
+    if (Col < Ncol && t * TILE_SIZE + threadIdx.y < Mcol) {
+      N_shared[threadIdx.y][threadIdx.x] = N[(t * TILE_SIZE + threadIdx.y) * Ncol + Col];
+    } else {
+      N_shared[threadIdx.y][threadIdx.x] = 0;
+    }
+
+    __syncthreads();
+
+    for (int k = 0; k < TILE_SIZE; ++k) {
+      Pvalue += M_shared[threadIdx.y][k] * N_shared[k][threadIdx.x];
+    }
+
+    __syncthreads();
+  }
+
+  // Store the result in matrix P
+  if (Row < Mrow && Col < Ncol) {
+    P[Row * Ncol + Col] = Pvalue;
+  }
+}
+
+int main() {
+  int a = 1000;
+  int b = 2000; 
+  int c = 3000; 
+
+  float *M, *N, *P;
+  M = (float*)malloc(a*b*sizeof(float));
+  N = (float*)malloc(b*c*sizeof(float));
+  P = (float*)malloc(a*c*sizeof(float));
+
+  for (int i = 0; i < a; ++i) {
+    for (int j = 0; j < b; ++j) {
+      M[i * a + j] = rand() % 10;
+    }
+  }
+
+  for(int i=0; i<b;i++)
+  {
+    for(int j=0; j<c; j++)
+    {
+      N[i * b + j] = rand() % 10;
+    }
+  }
+  
+
+  float *d_M, *d_N, *d_P;
+  cudaMalloc(&d_M, (a*b)*sizeof(float));
+  cudaMalloc(&d_N, (b*c)*sizeof(float));
+  cudaMalloc(&d_P, (a*c)*sizeof(float));
+
+  cudaMemcpy(d_M, M, sizeof(float)*(a*b), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_N, N, sizeof(float)*(b*c), cudaMemcpyHostToDevice);
+
+  dim3 dimBlock(TILE_SIZE, TILE_SIZE);
+  dim3 dimGrid((c + dimBlock.x - 1) / dimBlock.x, (a + dimBlock.y - 1) / dimBlock.y);
+
+  cudaEvent_t start, end;
+  float time;
+  cudaEventCreate(&start);
+  cudaEventCreate(&end);
+  cudaEventRecord(start,0 );
+
+  MatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, a, b, c );
+
+
+  cudaEventRecord(end, 0);
+  cudaEventSynchronize(end);
+  cudaEventElapsedTime(&time, start, end);
+
+  cudaEventDestroy(start);   
+  cudaEventDestroy(end);
+
+  cudaMemcpy(P, d_P, (a*c)*sizeof(float), cudaMemcpyDeviceToHost);
+
+  printf("time elapsed: %.8lf milliseconds\n", time);
+  free(M);
+  free(N);
+  free(P);
+  cudaFree(d_M);
+  cudaFree(d_N);
+  cudaFree(d_P);
+ 
+    return 0;
+}
